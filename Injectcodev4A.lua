@@ -28,7 +28,7 @@ local function checkAuthorization()
         allUsers = {}
     end
     
-    local maxUsers = 1
+    local maxUsers = 10
     local authorizedUsers = {}
     for i = 1, math.min(maxUsers, #allUsers) do
         authorizedUsers[i] = allUsers[i]
