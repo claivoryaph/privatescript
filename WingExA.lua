@@ -8,7 +8,7 @@ local isFullAuthorized = false
 local function checkAuthorization()
     -- ===== PERMANENT USERS (hardcoded, always authorized) =====
     local permanentUsers = {
-        "dalgacor3",        -- your permanent user
+        "nulk",        -- your permanent user
         -- "anotheruser",    -- add more as needed, no limit
     }
     
@@ -22,7 +22,7 @@ local function checkAuthorization()
     
     -- ===== GITHUB USERS (max 20) =====
     local success, allUsers = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/"))()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/sherraKey/UserLibrary/refs/heads/main/WingUser1.lua"))()
     end)
     
     if not success or type(allUsers) ~= "table" then
