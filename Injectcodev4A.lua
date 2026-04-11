@@ -1186,7 +1186,7 @@ local function toggleHatch()
         HatchButton.BackgroundColor3 = Color3.fromRGB(100,100,100)
         hatchThread = coroutine.create(function()
             while hatchRunning do
-                local args = {7000102, 10}
+                local args = {7000105, 10}
                 game:GetService("ReplicatedStorage"):WaitForChild("Tool"):WaitForChild("DrawUp"):WaitForChild("Msg"):WaitForChild("DrawHero"):InvokeServer(unpack(args))
                 wait(0.2)
             end
