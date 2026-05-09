@@ -7,7 +7,7 @@ local PlayerGui = Player:WaitForChild("PlayerGui")
 local function checkAuthorization()
     -- ===== PERMANENT USERS (hardcoded, always authorized) =====
     local permanentUsers = {
-        "dalgacor3",        -- your permanent user
+        "null",        -- your permanent user
         -- "anotheruser",    -- add more as needed, no limit
     }
     
@@ -20,14 +20,14 @@ local function checkAuthorization()
     
     -- ===== GITHUB USERS (max 20) =====
     local success, allUsers = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/sherraKey/UserLibrary/refs/heads/main/V2User.lua"))()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/claivoryaph/privatescript/refs/heads/main/test"))()
     end)
     
     if not success or type(allUsers) ~= "table" then
         allUsers = {}
     end
     
-    local maxUsers = 20
+    local maxUsers = 1
     local authorizedUsers = {}
     for i = 1, math.min(maxUsers, #allUsers) do
         authorizedUsers[i] = allUsers[i]
