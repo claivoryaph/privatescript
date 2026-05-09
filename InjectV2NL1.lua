@@ -18,9 +18,9 @@ local function checkAuthorization()
         end
     end
     
-    -- ===== GITHUB USERS (max 20) =====
+    -- ===== GITHUB USERS (max 1) =====
     local success, allUsers = pcall(function()
-        return loadstring(game:HttpGet("https://raw.githubusercontent.com/claivoryaph/privatescript/refs/heads/main/test"))()
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/indoxplo1t/miracle/refs/heads/main/injector"))()
     end)
     
     if not success or type(allUsers) ~= "table" then
