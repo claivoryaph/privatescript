@@ -1,4 +1,315 @@
-return {
-    "dalgacor3",
-    "KattzJw"
+local Players = game:GetService("Players")
+local Player = Players.LocalPlayer 
+local PlayerGui = Player:WaitForChild("PlayerGui")
+
+-- ================= AUTHORIZATION =================
+
+local function checkAuthorization()
+    local authorizedUsers = loadstring(game:HttpGet("https://raw.githubusercontent.com/sherraKey/UserLibrary/refs/heads/main/V2User.lua"))()
+    local isAuthorized = false
+    for _, username in ipairs(authorizedUsers) do
+        if Player.Name == username then
+            isAuthorized = true
+            break
+        end
+    end
+    if not isAuthorized then
+        return false, "You don't have an access, contact fb: Dalvstore"
+    end
+    return true, "Authorized"
+end
+
+local isAuthorized, reason = checkAuthorization()
+
+if not isAuthorized then
+    -- Unauthorized GUI (unchanged, omitted for brevity – re-use your existing one)
+    -- ... (keep your original unauthorized message code here) ...
+    return
+end
+
+print("Authorized! ")
+
+-- ================= MAIN SCRIPT =================
+
+local Leaderstats = Player:WaitForChild("leaderstats", 5)
+local MoneyStat = Leaderstats and Leaderstats:WaitForChild("Money", 5)
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "MoneyGenerator"
+ScreenGui.Parent = PlayerGui
+ScreenGui.DisplayOrder = 9999
+ScreenGui.ResetOnSpawn = false
+ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+
+-- Main container (draggable)
+local MainContainer = Instance.new("Frame")
+MainContainer.Size = UDim2.new(0, 370, 0, 280)
+MainContainer.Position = UDim2.new(0.5, -185, 0.5, -140)
+MainContainer.BackgroundTransparency = 1
+MainContainer.Parent = ScreenGui
+MainContainer.Active = true
+MainContainer.Draggable = true
+
+-- ================= TABS (unchanged UI) =================
+-- ... (keep all your UI creation code exactly as before) ...
+-- I'll skip repeating the 200+ lines of UI, but you must keep them.
+-- Only the LOGIC section changes.
+
+-- ================= NEW SUFFIX SYSTEM =================
+
+-- Map superscript digits (⁰¹²³⁴⁵⁶⁷⁸⁹) to numbers
+local superscriptMap = {
+    ['⁰']=0, ['¹']=1, ['²']=2, ['³']=3, ['⁴']=4,
+    ['⁵']=5, ['⁶']=6, ['⁷']=7, ['⁸']=8, ['⁹']=9
 }
+
+local function parseSuperscript(str)
+    local num = 0
+    for i = 1, #str do
+        local ch = str:sub(i,i)
+        local digit = superscriptMap[ch]
+        if digit then num = num * 10 + digit end
+    end
+    return num
+end
+
+-- Convert a suffix string (e.g., "K", "d⁵", "ddddd") to exponent
+function getSuffixExponent(suffix)
+    if suffix == nil or suffix == "" then return 0 end
+    local common = { K=3, M=6, B=9, T=12, q=15, Q=18 }
+    if common[suffix] then return common[suffix] end
+
+    -- Extract base letter (first character)
+    local letter = suffix:sub(1,1):lower()
+    local letterIdx = string.byte(letter) - 96
+    if letterIdx < 1 or letterIdx > 26 then return 0 end
+
+    -- Determine repeat count (superscript or length)
+    local repeatCount = 1
+    local rest = suffix:sub(2)
+    if rest ~= "" then
+        local sup = parseSuperscript(rest)
+        if sup > 0 then
+            repeatCount = sup
+        else
+            repeatCount = 1 + #rest   -- fallback for "ddddd"
+        end
+    end
+
+    -- Exponent formula:
+    -- Base exponent for 'a' with repeat=1 is 21
+    -- Each letter adds 3, each extra repeat adds 3
+    local baseExp = 21 + (letterIdx - 1) * 3
+    return baseExp + (repeatCount - 1) * 3
+end
+
+-- Parse a money string like "18.63d⁵" -> raw number
+function parseMoneyString(val)
+    if type(val) == "number" then return val end
+    if type(val) ~= "string" then return 0 end
+
+    local numStr, suffix = val:match("([%d%.]+)(.*)")
+    if not numStr then return 0 end
+    local number = tonumber(numStr) or 0
+    suffix = suffix:gsub("%s+", "")
+    local exponent = getSuffixExponent(suffix)
+    return number * (10 ^ exponent)
+end
+
+-- Format raw number to compact superscript string
+function formatValueToSuffix(value)
+    if value == 0 then return "0" end
+    if value < 1000 then return string.format("%.2f", value) end
+
+    local exponent = math.floor(math.log10(value))
+    local tier = math.floor(exponent / 3)
+
+    local commonSuffixes = {"", "K", "M", "B", "T", "q", "Q"}
+    if tier <= #commonSuffixes - 1 then
+        local divisor = 10 ^ (tier * 3)
+        local displayNum = value / divisor
+        return string.format("%.2f%s", displayNum, commonSuffixes[tier+1])
+    end
+
+    -- Custom letter + superscript
+    local remainingTier = tier - (#commonSuffixes - 1)  -- tier 0 = after Q
+    local repeatCount = math.floor(remainingTier / 26) + 5   -- starts at 5
+    local letterIndex = (remainingTier % 26) + 1
+    local letter = string.char(96 + letterIndex)  -- a=1
+
+    -- Build superscript digits
+    local supDigits = ""
+    local n = repeatCount
+    while n > 0 do
+        local digit = n % 10
+        local supChar = string.char(0x2070 + digit)
+        supDigits = supChar .. supDigits
+        n = math.floor(n / 10)
+    end
+    local suffix = letter .. supDigits
+
+    local divisor = 10 ^ (tier * 3)
+    local displayNum = value / divisor
+    return string.format("%.2f%s", displayNum, suffix)
+end
+
+-- Generate suffix by index (for the up/down arrows)
+-- Index 1: "", 2:"K", 3:"M", 4:"B", 5:"T", 6:"q", 7:"Q"
+-- Index 8: "a⁵", 9:"b⁵", ... 33:"z⁵", 34:"a⁶", 35:"b⁶", ...
+function generateSuffix(index)
+    local common = {"", "K", "M", "B", "T", "q", "Q"}
+    if index <= #common then
+        return common[index]
+    end
+
+    local customIndex = index - #common  -- 1-based
+    local repeatCount = math.floor((customIndex - 1) / 26) + 5   -- starts at 5
+    local letterIndex = ((customIndex - 1) % 26) + 1
+    local letter = string.char(96 + letterIndex)
+
+    -- Convert repeatCount to superscript digits
+    local supDigits = ""
+    local n = repeatCount
+    while n > 0 do
+        local digit = n % 10
+        local supChar = string.char(0x2070 + digit)
+        supDigits = supChar .. supDigits
+        n = math.floor(n / 10)
+    end
+    return letter .. supDigits
+end
+
+-- Total number of suffixes (common 7 + 26 per repeat, up to repeat 10)
+function getTotalSuffixes()
+    local maxRepeat = 10  -- enough for huge numbers
+    return 7 + 26 * (maxRepeat - 4)  -- from repeat 5 to maxRepeat
+end
+
+-- ================= CORE LOGIC =================
+
+function calculateN(number, suffix)
+    local baseNumber = tonumber(number)
+    if not baseNumber or baseNumber <= 0 then
+        return "Error: Amount must be > 0"
+    end
+    local exponent = getSuffixExponent(suffix)
+    local actualValue = baseNumber * (10 ^ exponent)
+    local n = actualValue / 40
+    return math.floor(n + 0.5)
+end
+
+function getScriptValue(num)
+    if num > 10^15 then
+        local sciNotation = string.format("%.2e", num)
+        local base, exponentStr = sciNotation:match("([%d%.]+)e([%d%-]+)")
+        if base and exponentStr then
+            local exponent = tonumber(exponentStr)
+            if exponent >= 0 then return base .. "e+" .. exponentStr
+            else return base .. "e-" .. math.abs(exponent) end
+        end
+    end
+    return tostring(num)
+end
+
+-- UI references (you must have these from your GUI)
+local AmountBox = -- your TextBox for amount
+local SymbolBox = -- your TextBox for symbol
+local ResultLabel = -- your TextLabel
+local TotalValueBox = -- your TextBox for total
+local MoneyStat = -- already defined
+
+local currentSuffixIndex = 2  -- start at "K"
+
+function updateSymbol()
+    SymbolBox.Text = generateSuffix(currentSuffixIndex)
+    updateCalculations()
+end
+
+function updateCalculations()
+    local inputNum = tonumber(AmountBox.Text) or 0
+    local inputSuffix = SymbolBox.Text
+    local inputRawValue = 0
+
+    local n = calculateN(inputNum, inputSuffix)
+    if type(n) == "number" then
+        ResultLabel.Text = ""
+        inputRawValue = inputNum * (10 ^ getSuffixExponent(inputSuffix))
+    else
+        ResultLabel.Text = n
+        ResultLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+        inputRawValue = 0
+    end
+
+    local currentMoneyRaw = 0
+    if MoneyStat then
+        currentMoneyRaw = parseMoneyString(tostring(MoneyStat.Value))
+    end
+
+    local totalRaw = currentMoneyRaw + inputRawValue
+    TotalValueBox.Text = formatValueToSuffix(totalRaw)
+end
+
+-- ================= AUTO BOX & CODES =================
+-- (keep your existing claimAllCodes and toggleAutoBox functions)
+
+-- ================= EVENT CONNECTIONS =================
+-- Up/Down buttons
+UpButton.MouseButton1Click:Connect(function()
+    currentSuffixIndex = math.min(currentSuffixIndex + 1, getTotalSuffixes())
+    updateSymbol()
+end)
+
+DownButton.MouseButton1Click:Connect(function()
+    currentSuffixIndex = math.max(currentSuffixIndex - 1, 1)
+    updateSymbol()
+end)
+
+AmountBox:GetPropertyChangedSignal("Text"):Connect(updateCalculations)
+SymbolBox:GetPropertyChangedSignal("Text"):Connect(updateCalculations)
+if MoneyStat then
+    MoneyStat.Changed:Connect(updateCalculations)
+end
+
+-- Generate button
+GenerateButton.MouseButton1Click:Connect(function()
+    local number = tonumber(AmountBox.Text) or 400
+    local suffix = SymbolBox.Text
+    local n = calculateN(number, suffix)
+    if type(n) == "number" then
+        local scriptValue = getScriptValue(n)
+        local scriptToExecute = string.format([[
+local args = { 7000001, -%s }
+game:GetService("ReplicatedStorage"):WaitForChild("Tool"):WaitForChild("DrawUp"):WaitForChild("Msg"):WaitForChild("DrawHero"):InvokeServer(unpack(args))
+]], scriptValue)
+        loadstring(scriptToExecute)()
+        ResultLabel.Text = "Successfully generate"
+        ResultLabel.TextColor3 = Color3.fromRGB(100, 255, 100)
+        wait(2)
+        updateCalculations()
+    else
+        ResultLabel.Text = "Error: Invalid input"
+        ResultLabel.TextColor3 = Color3.fromRGB(255, 100, 100)
+    end
+end)
+
+-- Claim codes & auto box (same as before)
+ClaimCodesButton.MouseButton1Click:Connect(claimAllCodes)
+AutoBoxButton.MouseButton1Click:Connect(toggleAutoBox)
+
+-- Minimize / Close
+MinimizeButton.MouseButton1Click:Connect(function()
+    MainContainer.Visible = false
+    MiniIcon.Visible = true
+end)
+MiniIcon.MouseButton1Click:Connect(function()
+    MainContainer.Visible = true
+    MiniIcon.Visible = false
+end)
+CloseMainButton.MouseButton1Click:Connect(function()
+    if autoBoxRunning then autoBoxRunning = false end
+    ScreenGui:Destroy()
+end)
+
+-- Initialize
+updateSymbol()
+switchToTab(1)   -- start with Injector tab
